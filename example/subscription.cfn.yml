@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Example of SNS Subscription
+
+Parameters:
+  SNSSubscriptionLambdaName:
+    Description: Password Generator Lambda name
+    Type: String
+
+Resources:
+
+  SNS:
+    Type: AWS::SNS::Topic
+    Properties: {}
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt Role.Arn
+      Runtime: nodejs4.3
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = (event, context, callback) => {
+            console.log(event);
+            callback(null, "OK")
+          };
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt Lambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+
+  LambdaSubscription:
+    Type: Custom::SNSSubscription
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Join [':', ['arn:aws:lambda', !Ref 'AWS::Region', !Ref 'AWS::AccountId', 'function', !Ref SNSSubscriptionLambdaName ]]
+      TopicArn: !Ref SNS
+      Protocol: 'lambda'
+      Endpoint: !GetAtt Lambda.Arn
+
+Outputs:
+  LambdaSubscription:
+    Value: !Ref LambdaSubscription
